@@ -1,0 +1,24 @@
+project_name = "st-local"
+
+upstream_cluster = {
+  server_count                = 1
+  agent_count                 = 1 # >=1 needed: 10-setup-fleet.sh labels a non-control-plane node role=agent
+  distro_version              = "v1.32.7+k3s1"
+  reserve_node_for_monitoring = false
+  enable_audit_log            = false
+}
+
+downstream_cluster_templates = [
+  {
+    cluster_count               = 10
+    server_count                = 1
+    agent_count                 = 0
+    distro_version              = "v1.32.7+k3s1"
+    reserve_node_for_monitoring = false
+    enable_audit_log            = false
+  }
+]
+
+first_kubernetes_api_port = 6445
+first_app_http_port       = 8080
+first_app_https_port      = 8443

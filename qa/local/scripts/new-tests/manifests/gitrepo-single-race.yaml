@@ -1,0 +1,16 @@
+kind: GitRepo
+apiVersion: fleet.cattle.io/v1alpha1
+metadata:
+  name: single-race
+  namespace: fleet-default
+spec:
+  # Fetched by a gitjob pod inside the cluster, so spec.repo is
+  # $GITEA_CLUSTER_URL, not localhost (see lib/config.sh and README.md).
+  # The ${...} placeholders are filled in by render_manifest.
+  repo: ${GITEA_CLUSTER_URL}/${GITEA_ORG}/${GITEA_REPO_A}
+  branch: main
+  paths:
+    - scalability-performance/single-race/one
+  targetNamespace: single-race
+  targets:
+    - clusterSelector: {}

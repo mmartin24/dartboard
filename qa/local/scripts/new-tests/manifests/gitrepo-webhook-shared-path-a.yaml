@@ -1,0 +1,22 @@
+kind: GitRepo
+apiVersion: fleet.cattle.io/v1alpha1
+metadata:
+  name: webhook-shared-path-a
+  namespace: fleet-default
+spec:
+  # Fetched by a gitjob pod inside the cluster, so spec.repo is
+  # $GITEA_CLUSTER_URL, not localhost (see lib/config.sh and README.md).
+  # The ${...} placeholders are filled in by render_manifest.
+  # Repo A of the webhook-shared-path pair (see 08-run-webhook-shared-path-test.sh).
+  # Its Gitea webhook points at the exact same gitjob receiver URL as repo
+  # B's -- gitjob disambiguates which GitRepo(s) a push affects by matching
+  # the webhook payload's repo URL against each GitRepo's spec.repo, not by
+  # the receiver URL/path (there's only one, shared by the whole cluster).
+  repo: ${GITEA_CLUSTER_URL}/${GITEA_ORG}/${GITEA_REPO_A}
+  branch: main
+  paths:
+    - scalability-performance/single-race/one
+  targetNamespace: webhook-shared-path-a
+  pollingInterval: 1h
+  targets:
+    - clusterSelector: {}

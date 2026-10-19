@@ -1,0 +1,21 @@
+kind: GitRepo
+apiVersion: fleet.cattle.io/v1alpha1
+metadata:
+  name: webhook-vs-polling
+  namespace: fleet-default
+spec:
+  # Fetched by a gitjob pod inside the cluster, so spec.repo is
+  # $GITEA_CLUSTER_URL, not localhost (see lib/config.sh and README.md).
+  # The ${...} placeholders are filled in by render_manifest.
+  # Gitea's ROOT_URL/DOMAIN must also be $GITEA_CLUSTER_HOST -- required for
+  # gitjob's webhook handler to match incoming payloads against spec.repo.
+  repo: ${GITEA_CLUSTER_URL}/${GITEA_ORG}/${GITEA_REPO_A}
+  branch: main
+  paths:
+    - scalability-performance/single-race/one
+  targetNamespace: webhook-vs-polling
+  # 07-run-webhook-vs-polling-test.sh patches this to its own
+  # poll_interval_seconds right after apply; value here is just a fallback.
+  pollingInterval: 15s
+  targets:
+    - clusterSelector: {}

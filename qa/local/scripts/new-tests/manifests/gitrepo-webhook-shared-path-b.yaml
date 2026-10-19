@@ -1,0 +1,18 @@
+kind: GitRepo
+apiVersion: fleet.cattle.io/v1alpha1
+metadata:
+  name: webhook-shared-path-b
+  namespace: fleet-default
+spec:
+  # Repo B of the webhook-shared-path pair -- a second, distinct Gitea repo
+  # ($GITEA_REPO_B) whose webhook points at the exact same gitjob receiver
+  # URL as repo A's. See gitrepo-webhook-shared-path-a.yaml and
+  # 08-run-webhook-shared-path-test.sh.
+  repo: ${GITEA_CLUSTER_URL}/${GITEA_ORG}/${GITEA_REPO_B}
+  branch: main
+  paths:
+    - scalability-performance/single-race-b/one
+  targetNamespace: webhook-shared-path-b
+  pollingInterval: 1h
+  targets:
+    - clusterSelector: {}

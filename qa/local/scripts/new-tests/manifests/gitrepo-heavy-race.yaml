@@ -1,0 +1,29 @@
+kind: GitRepo
+apiVersion: fleet.cattle.io/v1alpha1
+metadata:
+  name: heavy-race
+  namespace: fleet-default
+spec:
+  # Fetched by a gitjob pod inside the cluster, so spec.repo is
+  # $GITEA_CLUSTER_URL, not localhost (see lib/config.sh and README.md).
+  # The ${...} placeholders are filled in by render_manifest.
+  repo: ${GITEA_CLUSTER_URL}/${GITEA_ORG}/${GITEA_REPO_A}
+  branch: main
+  paths:
+    - scalability-performance/heavy-race/grafana
+  # No targetNamespace here (unlike the other manifests in this
+  # directory) -- the real Grafana chart creates a ClusterRole
+  # (dashboard/sidecar RBAC), and targetNamespace forbids any cluster-scoped
+  # resource outright ("error while running post render on files: invalid
+  # cluster scoped object ... Your config uses targetNamespace ... thus
+  # forbids cluster-scoped resources"), which left this bundle stuck in
+  # ErrApplied indefinitely -- confirmed by an actual test run.
+  # defaultNamespace is NOT a valid GitRepo field either (confirmed: strict
+  # decoding error, unknown field) -- it only belongs in the bundle's own
+  # fleet.yaml, see scalability-performance/heavy-race/grafana/fleet.yaml
+  # in the Gitea repo.
+  # Short poll so 04-run-heavy-content-race-test.sh's pushed commits are
+  # noticed quickly instead of waiting on Fleet's much longer default.
+  pollingInterval: 5s
+  targets:
+    - clusterSelector: {}

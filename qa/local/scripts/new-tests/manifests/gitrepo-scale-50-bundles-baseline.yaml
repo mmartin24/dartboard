@@ -1,0 +1,23 @@
+kind: GitRepo
+apiVersion: fleet.cattle.io/v1alpha1
+metadata:
+  name: scale-50-single
+  namespace: fleet-default
+spec:
+  # Fetched by a gitjob pod inside the cluster, so spec.repo is
+  # $GITEA_CLUSTER_URL, not localhost (see lib/config.sh and README.md).
+  # The ${...} placeholders are filled in by render_manifest.
+  repo: ${FETCH_REPO_URL}
+  branch: main
+  paths:
+    - scalability-performance/scale-50-bundles/ten
+    - scalability-performance/scale-50-bundles/twenty
+    - scalability-performance/scale-50-bundles/thirty
+    - scalability-performance/scale-50-bundles/fourty
+    - scalability-performance/scale-50-bundles/fifty
+  targetNamespace: scale-50-single
+  # Short poll so a pushed commit is noticed quickly instead of waiting on
+  # Fleet's much longer default.
+  pollingInterval: 5s
+  targets:
+    - clusterSelector: {}

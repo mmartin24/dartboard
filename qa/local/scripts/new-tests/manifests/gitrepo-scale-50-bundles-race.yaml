@@ -1,0 +1,24 @@
+kind: GitRepo
+apiVersion: fleet.cattle.io/v1alpha1
+metadata:
+  name: scale-50-race
+  namespace: fleet-default
+spec:
+  # Fetched by a gitjob pod inside the cluster, so spec.repo is
+  # $GITEA_CLUSTER_URL, not localhost (see lib/config.sh and README.md).
+  # The ${...} placeholders are filled in by render_manifest.
+  repo: ${GITEA_CLUSTER_URL}/${GITEA_ORG}/${GITEA_REPO_A}
+  branch: main
+  paths:
+    - scalability-performance/scale-50-bundles/ten
+    - scalability-performance/scale-50-bundles/twenty
+    - scalability-performance/scale-50-bundles/thirty
+    - scalability-performance/scale-50-bundles/fourty
+    - scalability-performance/scale-50-bundles/fifty
+  targetNamespace: scale-50-race
+  # Without this, Fleet only re-polls the git remote on its (much longer)
+  # default interval, so a script pushing commits every few seconds sits
+  # waiting far longer than expected for each one to be noticed.
+  pollingInterval: 5s
+  targets:
+    - clusterSelector: {}
