@@ -20,7 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/results.sh"
 
 # VER="0.16.0-rc.2"
-VER="${VER:-$(cat "$SCRIPT_DIR/../VERSION")}" # shared across all scripts, see scripts/VERSION
+VER="${VER:-$(cat "${SCRIPT_DIR%/*}/VERSION")}" # shared across all scripts, see scripts/VERSION
 
 clusters=${CLUSTERS:-$(kubectl get clusters.fleet.cattle.io -n fleet-default --no-headers 2>/dev/null | wc -l)} # registered Fleet Clusters; override with CLUSTERS=N
 agents=$clusters
@@ -81,10 +81,15 @@ while (( cycle <= churn_cycles )); do
   emit_event "cycle $cycle: secrets removed"
 
   orphaned=$(kubectl get secrets --no-headers -A --field-selector type=fleet.cattle.io/bundle-deployment/v1alpha1 2>/dev/null | wc -l)
-  # Size of k3s's embedded etcd db, read from the upstream k3d server
-  # container ("unknown" if the current kubectl context isn't a k3d cluster).
+  # Size of the upstream datastore: on k3d, k3s's embedded db read from the
+  # server container; elsewhere (RKE2 on AWS), etcd's size from the apiserver
+  # metrics. "unknown" if neither works.
   upstream_container=$(upstream_server_container)
-  etcd_size=$([[ -n "$upstream_container" ]] && docker exec "$upstream_container" du -sh /var/lib/rancher/k3s/server/db/ 2>/dev/null | awk '{print $1}' | tail -1)
+  if [[ -n "$upstream_container" ]]; then
+    etcd_size=$(docker exec "$upstream_container" du -sh /var/lib/rancher/k3s/server/db/ 2>/dev/null | awk '{print $1}' | tail -1)
+  else
+    etcd_size=$(kubectl get --raw /metrics 2>/dev/null | awk '/^apiserver_storage_size_bytes/ {printf "%.0f\n", $2}' | sort -g | tail -1 | numfmt --to=iec 2>/dev/null)
+  fi
   emit_event "cycle $cycle: orphaned_secrets=$orphaned etcd_size=${etcd_size:-unknown}"
 
   cycle=$((cycle + 1))

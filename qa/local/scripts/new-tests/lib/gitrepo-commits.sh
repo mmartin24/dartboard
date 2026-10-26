@@ -46,6 +46,8 @@ gitrepo_commits_init() {
     GITREPO_COMMITS_AUTH_ARGS=(-c "http.extraHeader=Authorization: token $GITEA_TOKEN")
   fi
   if [[ -d "$dir/.git" ]]; then
+    # The clone may be left over from a run against another Gitea (local vs AWS).
+    git -C "$dir" remote set-url origin "$repo_url"
     git -C "$dir" "${GITREPO_COMMITS_AUTH_ARGS[@]}" fetch origin "$branch"
     git -C "$dir" checkout "$branch"
     git -C "$dir" reset --hard "origin/$branch"

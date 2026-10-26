@@ -44,7 +44,7 @@ source "$SCRIPT_DIR/lib/results.sh"
 source "$SCRIPT_DIR/lib/gitrepo-commits.sh"
 
 # VER="0.16.0-rc.2"
-VER="${VER:-$(cat "$SCRIPT_DIR/../VERSION")}" # shared across all scripts, see scripts/VERSION
+VER="${VER:-$(cat "${SCRIPT_DIR%/*}/VERSION")}" # shared across all scripts, see scripts/VERSION
 
 gitrepo_a_name="webhook-shared-path-a"
 gitrepo_b_name="webhook-shared-path-b"

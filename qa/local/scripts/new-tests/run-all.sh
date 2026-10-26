@@ -3,7 +3,9 @@
 # Verdicts: jq -r 'select(.event=="summary") | "\(.scenario) \(.status)"' ../testresults/*/*.jsonl
 cd "$(dirname "$0")"
 # All tests of this run share one results folder.
-export RESULTS_RUN_DIR="$PWD/../testresults/${VER:-$(cat ../VERSION)}_$(date +%Y-%m-%d)"
+# ${PWD%/*}, not ../: qa/aws/scripts/new-tests is a link, and ../ would follow
+# it back to qa/local/scripts (wrong VERSION and results folder).
+export RESULTS_RUN_DIR="${PWD%/*}/testresults/${VER:-$(cat "${PWD%/*}/VERSION")}_$(date +%Y-%m-%d)"
 echo "=== RUNNING TEST 01: baseline scale (50 bundles to all clusters)"
 ./01-run-baseline-scale-test.sh
 echo "=== RUNNING TEST 02: race condition (8 rapid back-to-back commits)"
@@ -21,4 +23,5 @@ echo "=== RUNNING TEST 07: webhook vs polling (5 commits per phase)"
 echo "=== RUNNING TEST 08: webhook shared path (two repos, back-to-back pushes)"
 ./08-run-webhook-shared-path-test.sh
 # Optional: push this run to the results repo (RESULTS_REPO_DIR = clone path).
-[[ -n "${RESULTS_REPO_DIR:-}" ]] && ../../../publish-results.sh local "$RESULTS_RUN_DIR"
+# qa/aws/scripts/new-tests links here, so the folder name says local or aws.
+[[ -n "${RESULTS_REPO_DIR:-}" ]] && ../../../publish-results.sh "$(basename "$(cd ../.. && pwd)")" "$RESULTS_RUN_DIR"

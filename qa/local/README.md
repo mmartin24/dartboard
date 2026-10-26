@@ -10,7 +10,8 @@ commits faster than the clusters can follow, killing the Fleet controller
 mid-rollout, and so on. Every run produces a results file that says
 `PASSED`, `FAILED` or `ERROR`.
 
-Everything needed is in this folder (`qa/local/`).
+Everything needed is in this folder (`qa/local/`). To run the same tests on
+AWS clusters instead, see [`../aws/README.md`](../aws/README.md).
 
 How to use it, in two parts:
 
@@ -305,6 +306,7 @@ same values for `setup-gitea.sh`, `seed-test-repo.sh` and the tests.
 | `GITEA_CLUSTER_IP` | gateway of the k3d docker network | The IP the clusters use to reach your machine (`setup-gitea.sh`) |
 | `WEBHOOK_HOST_IP` | first IP from `hostname -I` | The IP Gitea uses to reach the clusters (`setup-gitea.sh`) |
 | `WEBHOOK_PORT` | `8080` | Host port that leads to the upstream cluster's ingress (`first_app_http_port` in `terraform.tfvars`) |
+| `WEBHOOK_URL` | not set | Only for Gitea running inside the cluster (AWS, set by `install-gitea-in-cluster.sh`): webhook target, and `setup-gitea.sh` skips the DNS entry and Ingress |
 
 The tests only ever push to `GITEA_HOST_URL`; they refuse any other address.
 

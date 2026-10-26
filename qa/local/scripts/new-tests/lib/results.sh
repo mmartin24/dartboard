@@ -35,7 +35,7 @@ results_init() {
   if ! kubectl get namespace cattle-fleet-system >/dev/null 2>&1; then
     echo "[new-tests] ERROR: kubectl cannot reach this project's Fleet cluster (namespace cattle-fleet-system not found)." >&2
     echo "[new-tests] Current kubectl context: $(kubectl config current-context 2>&1)" >&2
-    echo "[new-tests] Is KUBECONFIG exported in this shell? From qa/local/: export KUBECONFIG=\"\$PWD/default_config/upstream.yaml\"" >&2
+    echo "[new-tests] Is KUBECONFIG exported in this shell? From qa/local/ or qa/aws/: export KUBECONFIG=\"\$PWD/default_config/upstream.yaml\"" >&2
     exit 1
   fi
 

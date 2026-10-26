@@ -28,6 +28,9 @@
 #                      from `hostname -I`]
 #   WEBHOOK_PORT       host port mapped to the cluster ingress's port 80 [8080]
 #                      (first_app_http_port in terraform.tfvars)
+#   WEBHOOK_URL        set by install-gitea-in-cluster.sh: Gitea runs inside
+#                      the cluster, so the webhook goes straight to gitjob and
+#                      the cluster side below (DNS entry, Ingress) is skipped
 # plus everything in lib/config.sh.
 
 set -euo pipefail
@@ -83,7 +86,11 @@ for repo in "$GITEA_REPO_A" "$GITEA_REPO_B"; do
   fi
 done
 
-### Cluster: where pods reach this host
+### Cluster: where pods reach this host (only when Gitea runs outside the cluster)
+if [[ -n "${WEBHOOK_URL:-}" ]]; then
+  webhook_url="$WEBHOOK_URL"
+  echo "Gitea runs in the cluster, webhook $webhook_url"
+else
 gateway="${GITEA_CLUSTER_IP:-}"
 if [[ -z "$gateway" ]]; then
   container=$(upstream_server_container)
@@ -137,6 +144,7 @@ spec:
 EOF
 kubectl rollout restart deployment coredns -n kube-system
 kubectl rollout status deployment coredns -n kube-system --timeout=120s
+fi
 
 ### Gitea: one gogs webhook per repo -> gitjob
 for repo in "$GITEA_REPO_A" "$GITEA_REPO_B"; do
