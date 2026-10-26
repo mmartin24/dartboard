@@ -14,7 +14,8 @@ reaches it through a `kubectl port-forward` on `localhost:3001`.
 
 **Step 1. Settings and AWS login.** Copy `terraform.tfvars.example` to
 `terraform.tfvars` (git-ignored) and fill in your AWS profile and SSH key
-paths, then log in:
+paths. Also create the Fleet version file (git-ignored, it changes all the
+time): `cp scripts/VERSION.example scripts/VERSION`. Then log in:
 
 ```bash
 aws sso login --profile <profile>
