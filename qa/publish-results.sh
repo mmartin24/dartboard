@@ -9,5 +9,6 @@ name="$(basename "$run")"
 mkdir -p "$repo/$target/$name"
 cp "$run"/*.jsonl "$repo/$target/$name/"
 git -C "$repo" add "$target/$name"
-git -C "$repo" commit -m "Results: $target $name"
+# Nothing staged = this run is already committed; still push, in case an earlier push failed.
+git -C "$repo" diff --cached --quiet || git -C "$repo" commit -m "Results: $target $name"
 git -C "$repo" push
