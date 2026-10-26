@@ -121,8 +121,13 @@ Open `terraform.tfvars` (it is not committed) and set `cluster_count`, the
 number of downstream clusters. Start with 10. See [Number of
 clusters](#number-of-clusters) before going higher.
 
-The Fleet version to test is in `scripts/VERSION` (for example
-`0.17.0-alpha.7`). Edit it if you want another one.
+The Fleet version to test is in `scripts/VERSION`, which is not committed
+(it changes all the time). Create it from the example and edit it if you want
+another version:
+
+```bash
+cp scripts/VERSION.example scripts/VERSION
+```
 
 ---
 
@@ -258,7 +263,7 @@ export `RESULTS_REPO_DIR` before `./scripts/new-tests/run-all.sh`.
 
 ## Fleet version
 
-`scripts/VERSION` holds the Fleet version to install and test. To test another
+`scripts/VERSION` (not committed, see Part 1.5) holds the Fleet version to install and test. To test another
 version on running clusters, change it and run `10-setup-fleet.sh` again. It
 upgrades Fleet in place, and the downstream agents follow within a minute. You
 don't need to register the clusters again.
