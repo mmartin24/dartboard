@@ -1,0 +1,337 @@
+terraform {
+  required_providers {
+    ssh = {
+      source = "loafoe/ssh"
+    }
+  }
+}
+
+data "http" "get_k3s" {
+  url = "https://get.k3s.io"
+
+  retry {
+    attempts = 5
+    min_delay_ms = 500
+    max_delay_ms = 3000
+  }
+
+  lifecycle {
+    postcondition {
+      condition     = contains([200], self.status_code)
+      error_message = "Status code invalid"
+    }
+  }
+}
+
+module "server_nodes" {
+  count                       = var.server_count
+  source                      = "../../aws/node"
+  project_name                = var.project_name
+  name                        = "${var.name}-server-${count.index}"
+  ssh_private_key_path        = var.ssh_private_key_path
+  ssh_user                    = var.ssh_user
+  ssh_tunnels                 = count.index == 0 ? [
+    [var.local_kubernetes_api_port, 6443],
+  ] : []
+  host_configuration_commands = ["cat /etc/os-release"]
+  node_module_variables       = var.node_module_variables
+  network_config              = var.network_config
+  public                      = var.public
+}
+
+module "agent_nodes" {
+  count                       = var.agent_count
+  source                      = "../../aws/node"
+  project_name                = var.project_name
+  name                        = "${var.name}-agent-${count.index}"
+  ssh_private_key_path        = var.ssh_private_key_path
+  ssh_user                    = var.ssh_user
+  ssh_tunnels                 = []
+  host_configuration_commands = ["cat /etc/os-release"]
+  node_module_variables       = var.node_module_variables
+  network_config              = var.network_config
+  public                      = var.public
+}
+
+resource "ssh_sensitive_resource" "first_server_installation" {
+  count        = var.server_count > 0 ? 1 : 0
+  host         = module.server_nodes[0].private_name
+  private_key  = file(var.ssh_private_key_path)
+  user         = var.ssh_user
+  bastion_host = var.network_config.ssh_bastion_host
+  bastion_user = var.network_config.ssh_bastion_user
+  timeout      = "600s"
+
+  file {
+    content = data.http.get_k3s.response_body
+    destination = "${local.get_k3s_path}"
+    permissions = "0700"
+  }
+
+  file {
+    content = templatefile("${path.module}/install_k3s.sh", {
+      get_k3s_path   = local.get_k3s_path
+      distro_version = var.distro_version,
+      sans           = concat([module.server_nodes[0].private_name], var.sans)
+      exec           = "server"
+      token          = null
+      server_url     = null
+      cluster_init   = var.server_count > 1
+      labels         = []
+      taints         = []
+
+      client_ca_key          = tls_private_key.client_ca_key.private_key_pem
+      client_ca_cert         = tls_self_signed_cert.client_ca_cert.cert_pem
+      server_ca_key          = tls_private_key.server_ca_key.private_key_pem
+      server_ca_cert         = tls_self_signed_cert.server_ca_cert.cert_pem
+      request_header_ca_key  = tls_private_key.request_header_ca_key.private_key_pem
+      request_header_ca_cert = tls_self_signed_cert.request_header_ca_cert.cert_pem
+      max_pods               = var.max_pods
+      node_cidr_mask_size    = var.node_cidr_mask_size
+      datastore_endpoint     = var.datastore_endpoint
+      registry_mirror        = local.registry_mirror_endpoint
+    })
+    destination = "/tmp/install_k3s.sh"
+    permissions = "0700"
+  }
+
+  file {
+    content     = file("${path.module}/wait_for_k8s.sh")
+    destination = "/tmp/wait_for_k8s.sh"
+    permissions = "0700"
+  }
+
+  commands = [
+    "sudo /tmp/install_k3s.sh > >(tee install_k3s.log) 2> >(tee install_k3s.err >&2)",
+    "sudo /tmp/wait_for_k8s.sh",
+    "sudo cat /var/lib/rancher/k3s/server/node-token",
+  ]
+}
+
+resource "ssh_resource" "additional_server_installation" {
+  depends_on = [ssh_sensitive_resource.first_server_installation]
+  count      = max(0, var.server_count - 1)
+
+  host         = module.server_nodes[count.index + 1].private_name
+  private_key  = file(var.ssh_private_key_path)
+  user         = var.ssh_user
+  bastion_host = var.network_config.ssh_bastion_host
+  bastion_user = var.network_config.ssh_bastion_user
+  timeout      = "600s"
+
+  file {
+    content = data.http.get_k3s.response_body
+    destination = "${local.get_k3s_path}"
+    permissions = "0700"
+  }
+
+  file {
+    content = templatefile("${path.module}/install_k3s.sh", {
+      get_k3s_path   = local.get_k3s_path
+      distro_version = var.distro_version,
+      sans           = [module.server_nodes[count.index + 1].private_name]
+      exec           = "server"
+      token          = ssh_sensitive_resource.first_server_installation[0].result
+      server_url     = "https://${module.server_nodes[0].private_name}:6443"
+      cluster_init   = false
+      labels         = []
+      taints         = []
+
+      client_ca_key          = tls_private_key.client_ca_key.private_key_pem
+      client_ca_cert         = tls_self_signed_cert.client_ca_cert.cert_pem
+      server_ca_key          = tls_private_key.server_ca_key.private_key_pem
+      server_ca_cert         = tls_self_signed_cert.server_ca_cert.cert_pem
+      request_header_ca_key  = tls_private_key.request_header_ca_key.private_key_pem
+      request_header_ca_cert = tls_self_signed_cert.request_header_ca_cert.cert_pem
+      max_pods               = var.max_pods
+      node_cidr_mask_size    = var.node_cidr_mask_size
+      datastore_endpoint     = var.datastore_endpoint
+      registry_mirror        = local.registry_mirror_endpoint
+    })
+    destination = "/tmp/install_k3s.sh"
+    permissions = "0700"
+  }
+
+  commands = [
+    "sudo /tmp/install_k3s.sh > >(tee install_k3s.log) 2> >(tee install_k3s.err >&2)"
+  ]
+}
+
+resource "ssh_resource" "agent_installation" {
+  depends_on = [ssh_sensitive_resource.first_server_installation]
+  count      = var.agent_count
+
+  host         = module.agent_nodes[count.index].private_name
+  private_key  = file(var.ssh_private_key_path)
+  user         = var.ssh_user
+  bastion_host = var.network_config.ssh_bastion_host
+  bastion_user = var.network_config.ssh_bastion_user
+  timeout      = "600s"
+
+  file {
+    content = data.http.get_k3s.response_body
+    destination = "${local.get_k3s_path}"
+    permissions = "0700"
+  }
+
+  file {
+    content = templatefile("${path.module}/install_k3s.sh", {
+      get_k3s_path   = local.get_k3s_path
+      distro_version = var.distro_version,
+      sans           = [module.agent_nodes[count.index].private_name]
+      exec           = "agent"
+      token          = ssh_sensitive_resource.first_server_installation[0].result
+      server_url     = "https://${module.server_nodes[0].private_name}:6443"
+      cluster_init   = false
+      labels = var.reserve_node_for_monitoring && count.index == 0 ? [
+        { key : "monitoring", value : "true" }
+      ] : []
+      taints = var.reserve_node_for_monitoring && count.index == 0 ? [
+        { key : "monitoring", value : "true", effect : "NoSchedule" }
+      ] : []
+
+      client_ca_key          = tls_private_key.client_ca_key.private_key_pem
+      client_ca_cert         = tls_self_signed_cert.client_ca_cert.cert_pem
+      server_ca_key          = tls_private_key.server_ca_key.private_key_pem
+      server_ca_cert         = tls_self_signed_cert.server_ca_cert.cert_pem
+      request_header_ca_key  = tls_private_key.request_header_ca_key.private_key_pem
+      request_header_ca_cert = tls_self_signed_cert.request_header_ca_cert.cert_pem
+      max_pods               = var.max_pods
+      node_cidr_mask_size    = var.node_cidr_mask_size
+      datastore_endpoint     = var.datastore_endpoint
+      registry_mirror        = local.registry_mirror_endpoint
+    })
+    destination = "/tmp/install_k3s.sh"
+    permissions = "0700"
+  }
+
+  commands = [
+    "sudo /tmp/install_k3s.sh > >(tee install_k3s.log) 2> >(tee install_k3s.err >&2)",
+  ]
+}
+
+
+locals {
+  get_k3s_path = "/tmp/get_k3s.sh"
+  local_kubernetes_api_url = "https://${var.sans[0]}:${var.local_kubernetes_api_port}"
+  kubernetes_api_url = var.network_config.ssh_bastion_host == null ? "https://${module.server_nodes[0].public_name}:6443" : "https://${module.server_nodes[0].private_name}:6443"
+  registry_mirror_endpoint = {
+    "none"    = null
+    "bastion" = "http://${var.network_config.ssh_bastion_host}:5000"
+    "custom"  = var.custom_registry_mirror
+  }[var.registry_mirror_mode]
+}
+
+resource "local_file" "ssh_script" {
+  count = var.server_count > 0 ? 1 : 0
+  content = <<-EOT
+    #!/bin/sh
+    ssh -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null" \
+      -i ${var.ssh_private_key_path} \
+      %{if var.network_config.ssh_bastion_host != null~}
+      -o ProxyCommand="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${var.ssh_private_key_path} -W %h:%p ${var.network_config.ssh_bastion_user}@${var.network_config.ssh_bastion_host}" ${var.ssh_user}@${module.server_nodes[0].private_name} \
+      %{else~}
+      ${var.ssh_user}@${module.server_nodes[0].public_name} \
+      %{endif~}
+      $@
+  EOT
+
+  filename = "${path.root}/${terraform.workspace}_config/ssh-to-${var.name}-server-0.sh"
+}
+
+resource "local_file" "open_tunnels" {
+  count = var.server_count > 0 && length([
+    [var.local_kubernetes_api_port, 6443],
+  ]) > 0 ? 1 : 0
+  content = templatefile("${path.module}/open-tunnels-to.sh", {
+    ssh_bastion_host     = var.network_config.ssh_bastion_host
+    ssh_bastion_user     = var.network_config.ssh_bastion_user
+    ssh_tunnels          = [
+      [var.local_kubernetes_api_port, 6443],
+    ]
+    private_name         = module.server_nodes[0].private_name
+    public_name          = module.server_nodes[0].public_name
+    ssh_user             = var.ssh_user
+    ssh_private_key_path = var.ssh_private_key_path
+  })
+
+  filename = "${path.root}/${terraform.workspace}_config/open-tunnels-to-${var.name}-server-0.sh"
+}
+
+resource "local_file" "kubeconfig" {
+  content = yamlencode({
+    apiVersion = "v1"
+    clusters = [
+      {
+        cluster = {
+          certificate-authority-data = base64encode(tls_self_signed_cert.server_ca_cert.cert_pem)
+          server                     = local.local_kubernetes_api_url
+        }
+        name = var.name
+      }
+    ]
+    contexts = [
+      {
+        context = {
+          cluster = var.name
+          user = "admin@${var.name}"
+        }
+        name = var.name
+      }
+    ]
+    current-context = var.name
+    kind            = "Config"
+    preferences     = {}
+    users = [
+      {
+        user = {
+          client-certificate-data : base64encode(tls_locally_signed_cert.master_user.cert_pem)
+          client-key-data : base64encode(tls_private_key.master_user.private_key_pem)
+        }
+        name = "admin@${var.name}"
+      }
+    ]
+  })
+
+  filename        = "${path.root}/${terraform.workspace}_config/${var.name}.yaml"
+  file_permission = "0700"
+}
+
+resource "local_file" "kubeconfig-direct" {
+  content = yamlencode({
+    apiVersion = "v1"
+    clusters = [
+      {
+        cluster = {
+          certificate-authority-data = base64encode(tls_self_signed_cert.server_ca_cert.cert_pem)
+          server                     = local.kubernetes_api_url
+        }
+        name = var.name
+      }
+    ]
+    contexts = [
+      {
+        context = {
+          cluster = var.name
+          user = "admin@${var.name}"
+        }
+        name = var.name
+      }
+    ]
+    current-context = var.name
+    kind            = "Config"
+    preferences     = {}
+    users = [
+      {
+        user = {
+          client-certificate-data : base64encode(tls_locally_signed_cert.master_user.cert_pem)
+          client-key-data : base64encode(tls_private_key.master_user.private_key_pem)
+        }
+        name = "admin@${var.name}"
+      }
+    ]
+  })
+
+  filename        = "${path.root}/${terraform.workspace}_config/${var.name}-direct.yaml"
+  file_permission = "0700"
+}
