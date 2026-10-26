@@ -24,4 +24,6 @@ echo "=== RUNNING TEST 08: webhook shared path (two repos, back-to-back pushes)"
 ./08-run-webhook-shared-path-test.sh
 # Optional: push this run to the results repo (RESULTS_REPO_DIR = clone path).
 # qa/aws/scripts/new-tests links here, so the folder name says local or aws.
-[[ -n "${RESULTS_REPO_DIR:-}" ]] && ../../../publish-results.sh "$(basename "$(cd ../.. && pwd)")" "$RESULTS_RUN_DIR"
+if [[ -n "${RESULTS_REPO_DIR:-}" ]]; then
+  ../../../publish-results.sh "$(basename "$(cd ../.. && pwd)")" "$RESULTS_RUN_DIR"
+fi
