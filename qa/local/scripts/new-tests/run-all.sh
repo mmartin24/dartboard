@@ -20,3 +20,5 @@ echo "=== RUNNING TEST 07: webhook vs polling (5 commits per phase)"
 ./07-run-webhook-vs-polling-test.sh
 echo "=== RUNNING TEST 08: webhook shared path (two repos, back-to-back pushes)"
 ./08-run-webhook-shared-path-test.sh
+# Optional: push this run to the results repo (RESULTS_REPO_DIR = clone path).
+[[ -n "${RESULTS_REPO_DIR:-}" ]] && ../../../publish-results.sh local "$RESULTS_RUN_DIR"
