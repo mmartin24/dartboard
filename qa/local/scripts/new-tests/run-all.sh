@@ -3,7 +3,7 @@
 # Verdicts: jq -r 'select(.event=="summary") | "\(.scenario) \(.status)"' ../testresults/*/*.jsonl
 cd "$(dirname "$0")"
 # All tests of this run share one results folder.
-export RESULTS_RUN_DIR="$PWD/../testresults/${VER:-$(cat ../VERSION)}_$(date +%Y-%m-%d_%H-%M)"
+export RESULTS_RUN_DIR="$PWD/../testresults/${VER:-$(cat ../VERSION)}_$(date +%Y-%m-%d)"
 echo "=== RUNNING TEST 01: baseline scale (50 bundles to all clusters)"
 ./01-run-baseline-scale-test.sh
 echo "=== RUNNING TEST 02: race condition (8 rapid back-to-back commits)"

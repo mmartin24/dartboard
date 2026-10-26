@@ -218,15 +218,15 @@ with your setup.
 
 ## Results
 
-Every run writes its results to its own folder:
+All runs of one Fleet version on one day go to the same folder:
 
 ```text
-scripts/testresults/<fleet version>_<date>_<HH-MM>/<test>.jsonl
+scripts/testresults/<fleet version>_<date>/<test>.jsonl
 ```
 
-For example `0.17.0-alpha.7_2026-10-15_10-31/02_race_condition.jsonl`.
-`run-all.sh` puts all its tests in one folder; a test run on its own gets a
-folder of its own. The date and time in the folder name are local time. Each
+For example `0.17.0-alpha.7_2026-10-15/02_race_condition.jsonl`. A test run
+again on the same day gets its start time added, e.g.
+`02_race_condition_14-05-31.jsonl`. Dates and times are local time. Each
 file is JSON Lines: one JSON object per line, a timeline of what happened.
 
 The last lines give the verdict. The `summary` line has `"status"` set to
@@ -241,6 +241,20 @@ jq -r 'select(.event=="summary") | "\(.scenario) \(.status)"' scripts/testresult
 
 The `ts` fields inside the files are UTC.
 
+### Publishing results
+
+Results stay on your machine until you publish them. To publish, clone your
+results repo (one folder per setup, e.g. `local/` and `aws/`) and run:
+
+```bash
+RESULTS_REPO_DIR=<clone of your results repo> \
+  ../publish-results.sh local scripts/testresults/<fleet version>_<date>
+```
+
+It copies the `.jsonl` files to `local/<fleet version>_<date>/` in that repo,
+commits and **pushes right away**. To publish automatically after a full run,
+export `RESULTS_REPO_DIR` before `./scripts/new-tests/run-all.sh`.
+
 ## Fleet version
 
 `scripts/VERSION` holds the Fleet version to install and test. To test another
@@ -254,7 +268,10 @@ echo "0.17.0" > scripts/VERSION
 helm list -n cattle-fleet-system        # check what is installed
 ```
 
-Each results file records which version it was run on. For a single run
+Each results file records which version it was run on, and the results
+folder is named after `scripts/VERSION`. If that file does not match what is
+installed, the test prints `WARNING: VER=... but installed fleet-controller
+is ...`; fix the file (or run `10-setup-fleet.sh`) before going on. For a single run
 without editing the file, set `VER` instead:
 `VER=0.17.0 ./scripts/10-setup-fleet.sh`.
 

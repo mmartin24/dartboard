@@ -40,14 +40,13 @@ results_init() {
   fi
 
   run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
-  # One folder per run: testresults/<fleet version>_<local date>_<HH-MM>/<scenario>.jsonl.
-  # run-all.sh exports RESULTS_RUN_DIR so all its tests share one folder; a
-  # test run on its own gets a folder of its own.
-  dir="${RESULTS_RUN_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/testresults/${fleet_version}_$(date +%Y-%m-%d_%H-%M)}"
+  # One folder per Fleet version and day: testresults/<fleet version>_<local date>/<scenario>.jsonl,
+  # whether the tests run one by one or through run-all.sh.
+  dir="${RESULTS_RUN_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/testresults/${fleet_version}_$(date +%Y-%m-%d)}"
   mkdir -p "$dir"
   RESULTS_FILE="$dir/${scenario}.jsonl"
-  # Two runs of the same test in the same minute: keep both.
-  [[ -e "$RESULTS_FILE" ]] && RESULTS_FILE="$dir/${scenario}_${run_id}.jsonl"
+  # Same test run again that day: keep both, the later one with its start time.
+  [[ -e "$RESULTS_FILE" ]] && RESULTS_FILE="$dir/${scenario}_$(date +%H-%M-%S).jsonl"
   RESULTS_CONTEXT=$(_results_context "$scenario" "$fleet_version" "$run_id")
   echo "Scenario: $scenario"
   echo "Fleet Version: $fleet_version"
