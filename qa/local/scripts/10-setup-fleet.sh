@@ -9,7 +9,7 @@ set -euo pipefail
 
 kubectl create ns fleet-default || true
 
-VER="${VER:-$(cat "$(dirname "$0")/VERSION")}" # shared across all scripts, see scripts/VERSION
+VER="${VER:-$(cat "$(dirname "$0")/../../VERSION")}" # shared across all scripts, see qa/VERSION
 
 
 

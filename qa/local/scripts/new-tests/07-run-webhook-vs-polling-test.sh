@@ -39,7 +39,7 @@ source "$SCRIPT_DIR/lib/results.sh"
 source "$SCRIPT_DIR/lib/gitrepo-commits.sh"
 
 # VER="0.16.0-rc.2"
-VER="${VER:-$(cat "${SCRIPT_DIR%/*}/VERSION")}" # shared across all scripts, see scripts/VERSION
+VER="${VER:-$(cat "${SCRIPT_DIR%/*}/../../VERSION")}" # shared across all scripts, see qa/VERSION
 
 gitrepo_name="webhook-vs-polling"
 gitrepo_manifest="$SCRIPT_DIR/manifests/gitrepo-webhook-vs-polling.yaml"
@@ -101,6 +101,7 @@ push_waves() {
       fi
     done
     emit_event "$phase wave $wave: status.commit=$commit observed after ${elapsed}s" >&2
+    emit_metric "update_latency_${phase}_seconds" "$elapsed" s >&2
 
     (( wave < waves )) && sleep "$wave_interval_seconds"
     wave=$((wave + 1))

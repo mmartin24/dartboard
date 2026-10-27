@@ -30,7 +30,7 @@ source "$SCRIPT_DIR/lib/results.sh"
 source "$SCRIPT_DIR/lib/gitrepo-commits.sh"
 
 # VER="0.16.0-rc.2"
-VER="${VER:-$(cat "${SCRIPT_DIR%/*}/VERSION")}" # shared across all scripts, see scripts/VERSION
+VER="${VER:-$(cat "${SCRIPT_DIR%/*}/../../VERSION")}" # shared across all scripts, see qa/VERSION
 
 clusters=${CLUSTERS:-$(kubectl get clusters.fleet.cattle.io -n fleet-default --no-headers 2>/dev/null | wc -l)} # registered Fleet Clusters; override with CLUSTERS=N
 bundles=50
@@ -213,6 +213,7 @@ emit_event "final check: gitrepo status.commit=$final_status_commit (expected $f
 stale_total=$(stale_bundledeployment_count_excluding "$final_commit")
 echo
 emit_event "stale bundledeployments from superseded commits: $stale_total"
+emit_metric stale_bundledeployments "$stale_total" count
 
 ### Delete
 echo

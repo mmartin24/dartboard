@@ -21,7 +21,7 @@ source "$SCRIPT_DIR/lib/results.sh"
 source "$SCRIPT_DIR/lib/gitrepo-commits.sh"
 
 # VER="0.16.0-rc.2"
-VER="${VER:-$(cat "${SCRIPT_DIR%/*}/VERSION")}" # shared across all scripts, see scripts/VERSION
+VER="${VER:-$(cat "${SCRIPT_DIR%/*}/../../VERSION")}" # shared across all scripts, see qa/VERSION
 
 clusters=${CLUSTERS:-$(kubectl get clusters.fleet.cattle.io -n fleet-default --no-headers 2>/dev/null | wc -l)} # registered Fleet Clusters; override with CLUSTERS=N
 bundles=1
@@ -98,9 +98,11 @@ emit_event "gitrepo ready on commit $commit2 ($test_bd_ready bundledeployments r
 final_bd_count=$(kubectl get --no-headers --chunk-size=0 -A bundledeployments -l "fleet.cattle.io/repo-name=$gitrepo_name" | wc -l)
 final_status_commit=$(kubectl get gitrepo "$gitrepo_name" -n fleet-default -o jsonpath='{.status.commit}' 2>/dev/null)
 emit_event "final bundledeployment count: $final_bd_count (expected $test_bd), gitrepo status.commit=$final_status_commit (expected $commit2)"
+emit_metric bundledeployments_final "$final_bd_count" count
 
 stale_from_first_upload=$(kubectl get bundledeployments -A -l "fleet.cattle.io/commit=$commit1" --no-headers 2>/dev/null | wc -l)
 emit_event "bundledeployments still pointing at deleted commit $commit1: $stale_from_first_upload"
+emit_metric bundledeployments_on_deleted_commit "$stale_from_first_upload" count
 
 ### Delete
 echo

@@ -24,7 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/results.sh"
 
 # VER="0.16.0-rc.2"
-VER="${VER:-$(cat "${SCRIPT_DIR%/*}/VERSION")}" # shared across all scripts, see scripts/VERSION
+VER="${VER:-$(cat "${SCRIPT_DIR%/*}/../../VERSION")}" # shared across all scripts, see qa/VERSION
 
 clusters=${CLUSTERS:-$(kubectl get clusters.fleet.cattle.io -n fleet-default --no-headers 2>/dev/null | wc -l)} # registered Fleet Clusters; override with CLUSTERS=N
 bundles=1
@@ -67,6 +67,8 @@ leftover_bundles=$(kubectl get --no-headers --chunk-size=0 -n fleet-default bund
 leftover_bd=$(kubectl get --no-headers --chunk-size=0 -A bundledeployments -l "fleet.cattle.io/repo-name=$gitrepo_name" 2>/dev/null | wc -l)
 controller_ready=$(kubectl get pods -n cattle-fleet-system -l app=fleet-controller -o jsonpath='{.items[0].status.containerStatuses[0].ready}' 2>/dev/null)
 emit_event "leftover bundles=$leftover_bundles leftover bundledeployments=$leftover_bd fleet-controller ready=$controller_ready"
+emit_metric leftover_bundles "$leftover_bundles" count
+emit_metric leftover_bundledeployments "$leftover_bd" count
 
 expected="0 leftover bundles, 0 leftover bundledeployments, fleet-controller ready=true after delete-during-create"
 actual="leftover bundles=$leftover_bundles, leftover bundledeployments=$leftover_bd, controller ready=$controller_ready"

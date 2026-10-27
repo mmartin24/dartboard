@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/results.sh"
 
 # VER="0.16.0-rc.2"
-VER="${VER:-$(cat "${SCRIPT_DIR%/*}/VERSION")}" # shared across all scripts, see scripts/VERSION
+VER="${VER:-$(cat "${SCRIPT_DIR%/*}/../../VERSION")}" # shared across all scripts, see qa/VERSION
 
 clusters=${CLUSTERS:-$(kubectl get clusters.fleet.cattle.io -n fleet-default --no-headers 2>/dev/null | wc -l)} # registered Fleet Clusters; override with CLUSTERS=N
 agents=$clusters
@@ -78,6 +78,7 @@ echo
 emit_event "gitrepo ready"
 resync_seconds=$(($(date +%s) - resync_start))
 emit_event "controller resync time: ${resync_seconds}s ($total_bd bundledeployments)"
+emit_metric controller_resync_seconds "$resync_seconds" s
 
 wait_start
 while (( $(kubectl get --no-headers --chunk-size=0 -n fleet-default clusters | grep "$bundle_ready" | wc -l) != clusters )); do echo -n .; sleep 5; wait_check "clusters ready"; done
@@ -88,6 +89,7 @@ emit_event "clusters ready"
 final_bd_count=$(kubectl get --no-headers --chunk-size=0 -A bundledeployments | wc -l)
 echo
 emit_event "final bundledeployment count: $final_bd_count (expected $total_bd)"
+emit_metric bundledeployments_final "$final_bd_count" count
 
 ### Delete
 echo

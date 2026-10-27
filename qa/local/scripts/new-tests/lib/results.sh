@@ -13,17 +13,32 @@
 #   results_init <scenario> <fleet_version>
 #   emit_event "bundles ready"     # prints "bundles ready: <date>", like
 #                                   # the original script, and appends
-#                                   # {"ts":...,"event":"bundles ready"}
-#   results_finish <PASSED|FAILED|ERROR>
+#                                   # {"ts":...,"event":"bundles ready",...}
+#   emit_metric etcd_size_bytes 12345 bytes   # one numeric "metric" line
+#   results_summary <pass|fail|error> "<expected>" "<actual>"
 
 source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
 
 RESULTS_FILE=""
 RESULTS_SUMMARY_WRITTEN=""
 RESULTS_CONTEXT="{}"
+RESULTS_IDENTITY="{}"
+RESULTS_START_S=0
+# env for the results files: "local" or "aws".
+# Auto-detected from the script path (qa/aws runs the shared scripts through
+# its symlink); override with RESULTS_ENV=... for anything else.
+RESULTS_ENV="${RESULTS_ENV:-}"
+if [[ -z "$RESULTS_ENV" ]]; then
+  # Logical path (no symlink resolution): running through qa/aws's
+  # new-tests link must count as aws, not local.
+  case "${BASH_SOURCE[0]}" in
+    */qa/aws/*) RESULTS_ENV="aws" ;;
+    *)          RESULTS_ENV="local" ;;
+  esac
+fi
 
 results_init() {
-  local scenario="$1" fleet_version="$2"
+  local scenario="$1" fleet_version="${2#v}" # v0.17.0 and 0.17.0 are the same version
   local run_id dir
 
   # Fail fast and loud if kubectl isn't actually pointed at this project's
@@ -35,7 +50,7 @@ results_init() {
   if ! kubectl get namespace cattle-fleet-system >/dev/null 2>&1; then
     echo "[new-tests] ERROR: kubectl cannot reach this project's Fleet cluster (namespace cattle-fleet-system not found)." >&2
     echo "[new-tests] Current kubectl context: $(kubectl config current-context 2>&1)" >&2
-    echo "[new-tests] Is KUBECONFIG exported in this shell? From qa/local/ or qa/aws/: export KUBECONFIG=\"\$PWD/default_config/upstream.yaml\"" >&2
+    echo "[new-tests] KUBECONFIG comes from $_env_file; if that cluster is gone or its tunnel is down, run ./prepare.sh local (or aws) from qa/ again." >&2
     exit 1
   fi
 
@@ -48,6 +63,8 @@ results_init() {
   # Same test run again that day: keep both, the later one with its start time.
   [[ -e "$RESULTS_FILE" ]] && RESULTS_FILE="$dir/${scenario}_$(date +%H-%M-%S).jsonl"
   RESULTS_CONTEXT=$(_results_context "$scenario" "$fleet_version" "$run_id")
+  RESULTS_IDENTITY=$(_results_identity "$scenario" "$fleet_version" "$run_id")
+  RESULTS_START_S=$(date +%s)
   echo "Scenario: $scenario"
   echo "Fleet Version: $fleet_version"
   echo "Results file: $RESULTS_FILE"
@@ -58,6 +75,14 @@ results_init() {
   installed=$(jq -r .fleet_controller_image <<<"$RESULTS_CONTEXT")
   if [[ "${installed##*:v}" != "$fleet_version" ]]; then
     echo "[new-tests] WARNING: VER=$fleet_version but installed fleet-controller is $installed" >&2
+  fi
+  # env comes from the script path, which is only right when the shell passes
+  # its logical PWD on (not with env -i or some sudo setups). Local is always
+  # a k3d cluster, AWS never is: say so when the two disagree.
+  local ctx
+  ctx=$(kubectl config current-context 2>/dev/null)
+  if [[ ( "$RESULTS_ENV" == local && "$ctx" != k3d-* ) || ( "$RESULTS_ENV" == aws && "$ctx" == k3d-* ) ]]; then
+    echo "[new-tests] WARNING: env=$RESULTS_ENV but kubectl context is $ctx; run from a normal shell in qa/local or qa/aws, or set RESULTS_ENV and RESULTS_RUN_DIR" >&2
   fi
   echo -n "run started: "; date
   jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson ctx "$RESULTS_CONTEXT" \
@@ -110,6 +135,7 @@ _results_context() {
     --arg scenario "$scenario" \
     --arg run_id "$run_id" \
     --arg fleet_version "$fleet_version" \
+    --arg env "$RESULTS_ENV" \
     --arg fleet_controller_image "$(kubectl get deploy fleet-controller -n cattle-fleet-system -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null)" \
     --arg fleet_agent_versions "$(kubectl get clusters.fleet.cattle.io -A -o jsonpath='{range .items[*]}{.status.agent.version}{"\n"}{end}' 2>/dev/null | sort -u | paste -sd, -)" \
     --arg upstream_k8s_version "$(kubectl version -o json 2>/dev/null | jq -r .serverVersion.gitVersion)" \
@@ -117,7 +143,7 @@ _results_context() {
     --arg clusters "${clusters:-}" \
     --arg bundles "${bundles:-}" \
     --arg expected_bundledeployments "${test_bd:-${clusters:+${bundles:+$(( clusters * bundles ))}}}" \
-    '{scenario: $scenario, run_id: $run_id, fleet_version: $fleet_version,
+    '{scenario: $scenario, run_id: $run_id, fleet_version: $fleet_version, env: $env,
       fleet_controller_image: $fleet_controller_image, fleet_agent_versions: $fleet_agent_versions,
       upstream_k8s_version: $upstream_k8s_version,
       clusters_registered: ($clusters_registered | tonumber? // null),
@@ -125,9 +151,27 @@ _results_context() {
       expected_bundledeployments: ($expected_bundledeployments | tonumber? // null)}'
 }
 
+# _results_identity: the small per-line context every results line carries:
+# scenario, fleet_version, run_id, env. (The full run context -- images,
+# agent versions, cluster counts -- stays on the "run started" and "summary"
+# lines via _results_context; repeating it on every line only bloats the
+# files without making them easier to query.)
+_results_identity() {
+  local scenario="$1" fleet_version="$2" run_id="$3"
+  jq -nc \
+    --arg scenario "$scenario" \
+    --arg run_id "$run_id" \
+    --arg fleet_version "$fleet_version" \
+    --arg env "$RESULTS_ENV" \
+    '{scenario: $scenario, run_id: $run_id, fleet_version: $fleet_version, env: $env}'
+}
+
 _results_on_exit() {
   local rc="$1"
   [[ -n "$RESULTS_SUMMARY_WRITTEN" ]] && return
+  # A summary written inside $(...) (a subshell) doesn't set the variable
+  # above in this shell, so check the file too.
+  grep -q '"event":"summary"' "$RESULTS_FILE" 2>/dev/null && return
   results_summary error "script reaches its own pass/fail check" "exited early with code $rc, no pass/fail verdict (see terminal output)"
 }
 
@@ -155,13 +199,31 @@ wait_check() {
 # emit_event <description>
 # Prints "<description>: <date>" to the terminal (exactly like the
 # "echo -n 'foo: '; date" lines used in the scripts), and appends one
-# {"ts":...,"event":"<description>"} line to $RESULTS_FILE.
+# {"ts":...,"event":"<description>", "elapsed_s":N, scenario, run_id,
+# fleet_version, env} line to $RESULTS_FILE. elapsed_s is seconds since
+# results_init, so plots over the run don't have to parse the ts strings.
 emit_event() {
   local description="$1"
   echo -n "$description: "
   date
   jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg event "$description" \
-    '{ts: $ts, event: $event}' >>"$RESULTS_FILE"
+    --argjson identity "$RESULTS_IDENTITY" --argjson elapsed "$(( $(date +%s) - RESULTS_START_S ))" \
+    '{ts: $ts, event: $event, elapsed_s: $elapsed} + $identity' >>"$RESULTS_FILE"
+}
+
+# emit_metric <name> <number> [unit]
+# Appends one structured metric line to $RESULTS_FILE, for the numbers a
+# run measures (durations, etcd size, orphaned secrets, ...). The terminal
+# print mirrors emit_event's format. Value must be numeric -- for anything
+# else use emit_event.
+emit_metric() {
+  local name="$1" value="$2" unit="${3:-}"
+  echo "$name: $value${unit:+ $unit}"
+  jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg name "$name" --argjson value "$value" \
+    --arg unit "$unit" --argjson identity "$RESULTS_IDENTITY" \
+    --argjson elapsed "$(( $(date +%s) - RESULTS_START_S ))" \
+    '{ts: $ts, event: "metric", metric: $name, value: $value, unit: $unit,
+      elapsed_s: $elapsed} + $identity' >>"$RESULTS_FILE"
 }
 
 results_finish() {

@@ -20,7 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/results.sh"
 
 # VER="0.16.0-rc.2"
-VER="${VER:-$(cat "${SCRIPT_DIR%/*}/VERSION")}" # shared across all scripts, see scripts/VERSION
+VER="${VER:-$(cat "${SCRIPT_DIR%/*}/../../VERSION")}" # shared across all scripts, see qa/VERSION
 
 clusters=${CLUSTERS:-$(kubectl get clusters.fleet.cattle.io -n fleet-default --no-headers 2>/dev/null | wc -l)} # registered Fleet Clusters; override with CLUSTERS=N
 agents=$clusters
@@ -71,6 +71,7 @@ while (( cycle <= churn_cycles )); do
   echo
   cycle_seconds=$(($(date +%s) - cycle_start))
   emit_event "cycle $cycle: gitrepo ready (created-to-ready: ${cycle_seconds}s)"
+  emit_metric gitrepo_created_to_ready_seconds "$cycle_seconds" s
 
   kubectl delete -n fleet-default gitrepo "$gitrepo_name"
   echo
@@ -87,10 +88,13 @@ while (( cycle <= churn_cycles )); do
   upstream_container=$(upstream_server_container)
   if [[ -n "$upstream_container" ]]; then
     etcd_size=$(docker exec "$upstream_container" du -sh /var/lib/rancher/k3s/server/db/ 2>/dev/null | awk '{print $1}' | tail -1)
+    etcd_bytes=$(docker exec "$upstream_container" du -sb /var/lib/rancher/k3s/server/db/ 2>/dev/null | awk '{print $1}' | tail -1)
   else
-    etcd_size=$(kubectl get --raw /metrics 2>/dev/null | awk '/^apiserver_storage_size_bytes/ {printf "%.0f\n", $2}' | sort -g | tail -1 | numfmt --to=iec 2>/dev/null)
+    etcd_bytes=$(kubectl get --raw /metrics 2>/dev/null | awk '/^apiserver_storage_size_bytes/ {printf "%.0f\n", $2}' | sort -g | tail -1)
+    etcd_size=$(numfmt --to=iec 2>/dev/null <<<"${etcd_bytes:-}")
   fi
   emit_event "cycle $cycle: orphaned_secrets=$orphaned etcd_size=${etcd_size:-unknown}"
+  [[ "${etcd_bytes:-}" =~ ^[0-9]+$ ]] && emit_metric etcd_size_bytes "$etcd_bytes" bytes
 
   cycle=$((cycle + 1))
 done

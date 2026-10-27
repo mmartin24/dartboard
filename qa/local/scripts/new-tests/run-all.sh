@@ -5,7 +5,8 @@ cd "$(dirname "$0")"
 # All tests of this run share one results folder.
 # ${PWD%/*}, not ../: qa/aws/scripts/new-tests is a link, and ../ would follow
 # it back to qa/local/scripts (wrong VERSION and results folder).
-export RESULTS_RUN_DIR="${PWD%/*}/testresults/${VER:-$(cat "${PWD%/*}/VERSION")}_$(date +%Y-%m-%d)"
+ver="${VER:-$(cat "${PWD%/*}/../../VERSION")}"
+export RESULTS_RUN_DIR="${PWD%/*}/testresults/${ver#v}_$(date +%Y-%m-%d)"
 echo "=== RUNNING TEST 01: baseline scale (50 bundles to all clusters)"
 ./01-run-baseline-scale-test.sh
 echo "=== RUNNING TEST 02: race condition (8 rapid back-to-back commits)"

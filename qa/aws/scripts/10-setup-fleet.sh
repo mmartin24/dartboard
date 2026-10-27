@@ -9,37 +9,7 @@ set -euo pipefail
 
 kubectl create ns fleet-default || true
 
-# export VER='0.12.7'
-# VER="0.12.9-beta.2"
-# VER="0.13.0"
-# VER="0.13.2-rc.2"
-# VER="0.14.1-beta.3"
-# VER="0.13.4"
-# VER="0.13.5-beta.1"
-# VER="0.14.0-beta.1"
-# VER="0.13.7-alpha.2"
-# VER="0.13.9-rc.4"
-# VER="0.14.2-beta.1"
-# VER="0.14.3-rc.1"
-# VER="0.14.3-rc.2"
-# VER="0.14.3-rc.3"
-# VER="0.14.4-beta.2"
-# VER="v0.14.4-rc.1"
-# VER="0.14.5-beta.5"
-# VER="0.15.0-alpha.4"
-# VER="0.15.0-alpha.5"
-# VER="0.15.0-alpha.9"
-# VER="0.15.0-alpha.10"
-# VER="0.15.0-beta.1"
-# VER="0.15.0-beta.2"
-# VER="0.15.0-beta.4"
-# VER="0.15.0-rc.1"
-# VER="v0.15.0-rc.6"
-# VER="v0.15.0"
-# VER="0.15.1-beta.4"
-# VER="0.15.3-rc.1"
-# VER="0.16.0"
-VER="$(cat "$(dirname "$0")/VERSION")" # shared across all scripts, see scripts/VERSION
+VER="${VER:-$(cat "$(dirname "$0")/../../VERSION")}" # shared across all scripts, see qa/VERSION
 
 
 VER=${VER#v}

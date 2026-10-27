@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/results.sh"
 
 # VER="0.16.0-rc.2"
-VER="${VER:-$(cat "${SCRIPT_DIR%/*}/VERSION")}" # shared across all scripts, see scripts/VERSION
+VER="${VER:-$(cat "${SCRIPT_DIR%/*}/../../VERSION")}" # shared across all scripts, see qa/VERSION
 
 clusters=${CLUSTERS:-$(kubectl get clusters.fleet.cattle.io -n fleet-default --no-headers 2>/dev/null | wc -l)} # registered Fleet Clusters; override with CLUSTERS=N
 agents=$clusters
@@ -35,6 +35,7 @@ echo
 emit_event "test parameters: clusters=$clusters bundles=$bundles total_bundledeployments=$total_bd"
 
 ### Create
+created_at=$(date +%s)
 render_manifest "$gitrepo_manifest" | kubectl apply -f - -n fleet-default
 echo
 emit_event "created gitrepo for $bundles bundles"
@@ -58,6 +59,7 @@ wait_start
 while ! kubectl get -n fleet-default gitrepo "$gitrepo_name" | grep -q "$test_bd_ready"; do echo -n .; sleep 5; wait_check "gitrepo ready"; done
 echo
 emit_event "gitrepo ready"
+emit_metric gitrepo_created_to_ready_seconds "$(( $(date +%s) - created_at ))" s
 
 wait_start
 while (( $(kubectl get --no-headers --chunk-size=0 -n fleet-default clusters | grep "$bundle_ready" | wc -l) != clusters )); do echo -n .; sleep 5; wait_check "clusters ready"; done
@@ -67,6 +69,7 @@ emit_event "clusters ready"
 ### Delete
 echo
 echo "delete "
+deleted_at=$(date +%s)
 kubectl delete -n fleet-default gitrepo "$gitrepo_name"
 echo
 
@@ -74,6 +77,7 @@ wait_start "$DELETE_TIMEOUT_SECONDS"
 while (( $(kubectl get secrets --no-headers -A --field-selector type=fleet.cattle.io/bundle-deployment/v1alpha1 | wc -l) != 0 )); do echo -n .; sleep 5; wait_check "secrets removed"; done
 echo
 emit_event "secrets removed"
+emit_metric delete_to_secrets_removed_seconds "$(( $(date +%s) - deleted_at ))" s
 
 results_summary pass \
   "all $bundles bundles ready on $clusters clusters ($test_bd_ready bundledeployments), secrets removed after delete" \

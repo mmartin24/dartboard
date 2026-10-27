@@ -44,7 +44,7 @@ source "$SCRIPT_DIR/lib/results.sh"
 source "$SCRIPT_DIR/lib/gitrepo-commits.sh"
 
 # VER="0.16.0-rc.2"
-VER="${VER:-$(cat "${SCRIPT_DIR%/*}/VERSION")}" # shared across all scripts, see scripts/VERSION
+VER="${VER:-$(cat "${SCRIPT_DIR%/*}/../../VERSION")}" # shared across all scripts, see qa/VERSION
 
 gitrepo_a_name="webhook-shared-path-a"
 gitrepo_b_name="webhook-shared-path-b"
@@ -119,15 +119,18 @@ commit_b=$(push_marker_commit "$gitrepo_b_path" "shared-path-b")
 [[ -n "$commit_b" ]] || exit 1
 emit_event "pushed commit $commit_b to repo B (immediately after A, no wait)"
 
+reaction_start=$(date +%s)
 elapsed=0
 while [[ "$(kubectl get gitrepo "$gitrepo_a_name" -n fleet-default -o jsonpath='{.status.commit}' 2>/dev/null)" != "$commit_a" \
        || "$(kubectl get gitrepo "$gitrepo_b_name" -n fleet-default -o jsonpath='{.status.commit}' 2>/dev/null)" != "$commit_b" ]]; do
   echo -n .
   sleep 1
-  elapsed=$((elapsed + 1))
+  elapsed=$(( $(date +%s) - reaction_start ))
   (( elapsed >= webhook_timeout )) && break
 done
 echo
+# Only a real reaction is a measurement; on timeout the verdict below says so.
+(( elapsed < webhook_timeout )) && emit_metric webhook_reaction_seconds "$(( $(date +%s) - reaction_start ))" s
 
 a_commit=$(kubectl get gitrepo "$gitrepo_a_name" -n fleet-default -o jsonpath='{.status.commit}')
 b_commit=$(kubectl get gitrepo "$gitrepo_b_name" -n fleet-default -o jsonpath='{.status.commit}')
