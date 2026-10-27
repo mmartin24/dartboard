@@ -3,7 +3,7 @@
 #
 # Fills a git repo (branch main) with everything the tests fetch, so you don't
 # need a copy of anyone else's repo. Run it once on each of your two empty
-# Gitea repos (see README.md, "Bring your own Gitea"):
+# Gitea repos (see qa/README.md, "Gitea requirements"):
 #
 #   ./scripts/new-tests/seed-test-repo.sh "$GITEA_HOST_URL/$GITEA_ORG/$GITEA_REPO_A.git"
 #   ./scripts/new-tests/seed-test-repo.sh "$GITEA_HOST_URL/$GITEA_ORG/$GITEA_REPO_B.git"
@@ -21,6 +21,7 @@
 # header, never stored in the repo or in a URL.
 
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib/config.sh" # GITEA_TOKEN from qa/<env>/.env
 repo_url="${1:?usage: $0 <repo-url>}"
 : "${GITEA_TOKEN:?export GITEA_TOKEN first}"
 export GIT_TERMINAL_PROMPT=0

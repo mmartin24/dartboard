@@ -4,8 +4,22 @@
 # Where the tests fetch from and push to. Every value has a default and can
 # be overridden per run with an environment variable, e.g.
 #   GITEA_ORG=myorg GITEA_REPO_A=my-repo ./scripts/new-tests/02-run-race-condition-test.sh
-# Sourced by lib/results.sh, so every script has it. See README.md ("Bring
-# your own Gitea") for what has to exist on the Gitea side.
+# Sourced by lib/results.sh, so every script has it. See qa/README.md ("Gitea
+# requirements") for what has to exist on the Gitea side.
+
+# qa/<local|aws>/.env, written by qa/prepare.sh. Its values win over the
+# shell's, so a KUBECONFIG, GITEA_TOKEN or Gitea URL left over from the other
+# setup is never used. prepare.sh itself runs with QA_PREPARE=1 and skips it.
+_env_file="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/.env"
+if [[ -z "${QA_PREPARE:-}" ]]; then
+  if [[ ! -f "$_env_file" ]]; then
+    echo "[new-tests] ERROR: $_env_file not found. Run ./prepare.sh local (or aws) from qa/ first." >&2
+    exit 1
+  fi
+  while IFS='=' read -r _k _v || [[ -n "$_k" ]]; do
+    [[ "$_k" =~ ^[A-Z_][A-Z0-9_]*$ ]] && export "$_k=${_v%$'\r'}"
+  done <"$_env_file"
+fi
 
 # Gitea, as seen from the machine running the scripts (git push, API calls).
 GITEA_HOST_URL="${GITEA_HOST_URL:-http://localhost:3000}"

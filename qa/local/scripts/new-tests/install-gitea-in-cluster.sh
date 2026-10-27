@@ -4,7 +4,8 @@
 # For clusters that cannot reach a Gitea on your machine (AWS): runs Gitea as
 # a pod in the upstream cluster, creates an admin user and an API token, and
 # opens a port-forward so this machine reaches it on localhost. Prints the
-# settings the other scripts need, so run it through eval:
+# settings the other scripts need. qa/prepare.sh aws runs it and stores them
+# in qa/aws/.env; by hand, run it through eval:
 #
 #   eval "$(./install-gitea-in-cluster.sh)"
 #   ./setup-gitea.sh
