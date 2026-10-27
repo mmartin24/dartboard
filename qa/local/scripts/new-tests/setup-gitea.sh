@@ -16,7 +16,7 @@
 #   - the gitjob-webhook Ingress, so Gitea can reach gitjob's webhook receiver
 #
 # It does NOT install Gitea, change Gitea's app.ini, or touch the host firewall;
-# README.md ("Bring your own Gitea") lists those one-time steps. After this
+# qa/README.md ("Gitea requirements") lists those one-time steps. After this
 # script, fill the repos with ./seed-test-repo.sh.
 #
 # Requires: KUBECONFIG pointing at the upstream cluster, GITEA_TOKEN exported
