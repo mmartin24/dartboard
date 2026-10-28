@@ -1,5 +1,11 @@
 # Dartboard
 
+> [!NOTE]
+> This fork adds Fleet scalability tests (local k3d or AWS) in [qa/](qa/README.md).
+> Everything below is the original Dartboard README from [rancher/dartboard](https://github.com/rancher/dartboard).
+
+---
+
 A tool to run scalability and performance tests on the Rancher product family.
 
 Supports deploying to AWS and Azure or a local Docker daemon (via k3d) for infrastructure; k3s, RKE2 and AKS as Kubernetes distributions; any recent version of Rancher.

@@ -133,6 +133,13 @@ RESULTS_REPO_DIR=~/repos/my-results \
 With `RESULTS_REPO_DIR` exported, `run-all.sh` publishes at the end on its
 own.
 
+### Plot results in Grafana (optional)
+
+Each run writes JSONL files, so any tool can read them. A ready-made local
+setup (k3d + ClickHouse + Grafana) is in
+[mmartin24/fleet-scale-grafana](https://github.com/mmartin24/fleet-scale-grafana);
+you can use your own instead. A shared Grafana for these results is to be discussed.
+
 ---
 
 # Local (k3d): setup and run
