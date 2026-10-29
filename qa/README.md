@@ -214,8 +214,8 @@ kubectl get clusters.fleet.cattle.io -n fleet-default
 **5. Run the tests** (all 8 take about 15 minutes with 10 clusters):
 
 ```bash
-./local/scripts/new-tests/run-all.sh                         # all 8 tests
-./local/scripts/new-tests/02-run-race-condition-test.sh      # or a single one
+./run-tests.sh --target=local                          # all 8 tests
+./run-tests.sh --target=local --tests=02,07           # or only some (01 to 08)
 ```
 
 **6. Read the results**, see [Results](#results).
@@ -297,8 +297,8 @@ eval "$(./scripts/new-tests/install-gitea-in-cluster.sh)"
 **4. Run the tests:**
 
 ```bash
-./aws/scripts/new-tests/run-all.sh                           # all 8 tests
-./aws/scripts/new-tests/02-run-race-condition-test.sh        # or a single one
+./run-tests.sh --target=aws                            # all 8 tests
+./run-tests.sh --target=aws --tests=02,07             # or only some (01 to 08)
 ```
 
 **5. Read the results**, see [Results](#results).
