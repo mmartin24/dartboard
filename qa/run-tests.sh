@@ -1,20 +1,18 @@
 #!/bin/bash
 # Runs the scale tests of one setup. Run it from anywhere.
 #
-#   ./run-tests.sh --target=local|aws [--tests=all|02,07] [--version=0.16.3]
+#   ./run-tests.sh --target=local|aws [--tests=all|02,07]
 #
 # --tests    all (default), or test numbers 01-08 separated by commas: 02,07
-# --version  only names the results folder (default: qa/VERSION). It does not
-#            install Fleet, ./prepare.sh does; the tests warn if it differs
-#            from the installed fleet-controller.
+#
+# It tests the Fleet that ./prepare.sh installed from qa/VERSION.
 set -euo pipefail
-usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 1; }
+usage() { sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 1; }
 target="" tests=all
 for arg in "$@"; do
   case "$arg" in
     --target=*) target=${arg#*=} ;;
     --tests=*) tests=${arg#*=} ;;
-    --version=*) export VER=${arg#*=} ;;
     *) usage ;;
   esac
 done

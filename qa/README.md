@@ -6,6 +6,9 @@ They create one *upstream* cluster (where Fleet runs) and several
 your choice and run 8 test scenarios against it. Every run produces a results
 file that says `PASSED`, `FAILED` or `ERROR`.
 
+For a presentation-friendly overview and explanations of each scenario, see
+the [presentation notes](PRESENTATION-NOTES.md).
+
 | | Clusters | Gitea runs | Folder |
 |---|---|---|---|
 | **[Local (k3d)](#local-k3d-setup-and-run)** | k3d containers on your machine, as many as `cluster_count` in `local/terraform.tfvars` | in Docker on your machine | [`local/`](local/) |
@@ -18,22 +21,62 @@ Only the terraform files and `10-setup-fleet.sh` differ between the folders.
 Read the [common part](#common-to-both-setups) first, then follow the section
 of your setup top to bottom. All commands run from `qa/`.
 
+Run `./requirements.sh local` (or `aws`) before anything else: it checks that
+your machine is ready, on any Linux distribution. See
+[Check your machine](#check-your-machine).
+
 ---
 
 # Common to both setups
 
-## Fleet version
+## Check your machine
 
-The version to install and test is in `qa/VERSION` (git-ignored). Create it
-once:
+`requirements.sh` checks everything `prepare.sh` needs and changes nothing
+unless you ask:
 
 ```bash
-cp VERSION.example VERSION      # then edit if you want another version
+./requirements.sh local            # or: aws. Check only
+./requirements.sh local --fix      # also fixes the "todo" items
 ```
 
-It drives both setups and names the results folder. To test another version
-on running clusters, change it and run `./prepare.sh local` (or `aws`) again;
-Fleet is upgraded in place.
+What it does not change on your system is reported as `FAIL` with what to do:
+missing distribution packages (it prints the install command for apt, dnf,
+zypper, pacman or apk), Docker not running or not usable by your user, ports
+already in use, and a host firewall that blocks the clusters (it prints the
+rule for ufw, firewalld or iptables; it never edits firewalls).
+
+`--fix` only handles the `todo` items:
+
+- Missing `tofu`, `kubectl`, `helm` (and `k3d` for local): downloaded from the
+  official releases, checksum-verified, into `~/.local/bin` (or `$QA_BIN_DIR`).
+  No package manager, no sudo. Versions can be overridden, e.g.
+  `TOFU_VERSION=1.10.7`.
+- `qa/VERSION` and `qa/<env>/terraform.tfvars`: copied from their `.example`
+  files. Review them afterwards.
+- Local, with sudo: the inotify limits, now and on every boot (a new file,
+  `/etc/sysctl.d/90-fleet-qa.conf`).
+
+Local also checks free RAM, the host ports the clusters use, and that
+containers can reach published ports on your machine in both directions (two
+throwaway busybox containers). AWS needs `aws sso login` on top, which the
+script cannot do for you.
+
+## Fleet version
+
+The version to install and test is in `qa/VERSION` (git-ignored). Set it with
+`prepare.sh`, which writes the file and installs that Fleet:
+
+```bash
+./prepare.sh local --version=0.16.3      # or: aws
+```
+
+Without `--version`, `prepare.sh` installs what `qa/VERSION` says. Create the
+file once with `cp VERSION.example VERSION`, or edit it.
+
+The tests do not install anything: they test the Fleet that `prepare.sh`
+installed, and `VERSION` names the results folder. To test another version on
+running clusters, run `prepare.sh` again with the new `--version`; Fleet is
+upgraded in place.
 
 ## Gitea requirements
 
@@ -41,7 +84,7 @@ The tests push commits to a [Gitea](https://about.gitea.com) server and Fleet
 fetches from it. Gitea needs:
 
 - `DOMAIN` and `ROOT_URL` with the host name the clusters use to reach Gitea.
-- `[webhook] ALLOWED_HOST_LIST = *`.
+- `[security] ALLOWED_HOST_LIST = *,private` (newer Gitea ignores it under `[webhook]`).
 - An **access token** with the scopes `write:repository` and
   `write:organization`.
 
@@ -140,6 +183,11 @@ setup (k3d + ClickHouse + Grafana) is in
 [mmartin24/fleet-scale-grafana](https://github.com/mmartin24/fleet-scale-grafana);
 you can use your own instead. A shared Grafana for these results is to be discussed.
 
+Idea for later: have the tests send their results straight to ClickHouse (a
+small Go or Python tool that parses the JSONL), so a final deployment needs no
+watcher or publish step, and whoever changes the result format also changes how
+it is uploaded.
+
 ---
 
 # Local (k3d): setup and run
@@ -150,21 +198,33 @@ About 10 GB of free RAM for 10 clusters.
 ([OpenTofu](https://opentofu.org)), `k3d`, `kubectl`, `helm`, `git`, `curl`,
 `jq`, `envsubst`, `zsh`.
 
-**2. One-time machine setup:**
+**2. Check the machine:**
+
+```bash
+./requirements.sh local --fix
+```
+
+It installs the missing release binaries, raises the inotify limits and checks
+the ports and the network between clusters and your machine. If it reports
+`FAIL`, solve those by hand and run it again. The manual equivalent, for
+reference:
 
 ```bash
 sudo sysctl -w fs.inotify.max_user_instances=8192
-sudo ufw allow from 172.16.0.0/12       # lets the clusters reach your machine
+sudo ufw allow from 172.16.0.0/12       # lets the clusters reach your machine (use your firewall's equivalent)
 ```
 
 **3. Cluster settings.** Set `cluster_count` (downstream clusters) in
 `local/terraform.tfvars`. Start with 10.
 
 **4. Prepare everything:** Gitea in Docker, clusters, Fleet, Gitea repos and
-test content. `tofu apply` asks for your approval. Safe to re-run.
+test content. `tofu apply` asks for your approval; `TOFU_AUTO_APPROVE=1`
+skips it. Safe to re-run.
 
 ```bash
 ./prepare.sh local
+./prepare.sh local --version=0.16.3         # install another Fleet version
+TOFU_AUTO_APPROVE=1 ./prepare.sh local      # without the approval prompt
 ```
 
 It writes the settings the tests need (`KUBECONFIG`, Gitea token) to
@@ -182,7 +242,7 @@ docker run -d --name gitea -p 3000:3000 \
   -e GITEA__security__INSTALL_LOCK=true \
   -e GITEA__server__DOMAIN=gitea.qa.local \
   -e GITEA__server__ROOT_URL=http://gitea.qa.local:3000/ \
-  -e GITEA__webhook__ALLOWED_HOST_LIST='*' \
+  -e GITEA__security__ALLOWED_HOST_LIST='*,private' \
   gitea/gitea:latest
 until curl -s -o /dev/null http://localhost:3000/api/healthz; do sleep 1; done
 docker exec -u git gitea gitea admin user create --admin --username fleet-qa-admin \
@@ -215,7 +275,7 @@ kubectl get clusters.fleet.cattle.io -n fleet-default
 
 ```bash
 ./run-tests.sh --target=local                          # all 8 tests
-./run-tests.sh --target=local --tests=02,07           # or only some (01 to 08)
+./run-tests.sh --target=local --tests=02,07            # or only some (01 to 08)
 ```
 
 **6. Read the results**, see [Results](#results).
@@ -241,7 +301,11 @@ allowed to create EC2 and VPC resources, the SSH key pair at the paths in
 reached from your machine through a port-forward on `localhost:3001`.
 
 **1. Tools:** `tofu`, `kubectl`, `helm`, `git`, `curl`, `jq`, `envsubst`,
-`zsh`, `ssh`, AWS CLI.
+`zsh`, `ssh`, AWS CLI. Check them (and install the release binaries) with:
+
+```bash
+./requirements.sh aws --fix
+```
 
 **2. Settings and login.** Fill in your AWS profile and SSH key paths in
 `aws/terraform.tfvars`, then log in:
@@ -298,7 +362,7 @@ eval "$(./scripts/new-tests/install-gitea-in-cluster.sh)"
 
 ```bash
 ./run-tests.sh --target=aws                            # all 8 tests
-./run-tests.sh --target=aws --tests=02,07             # or only some (01 to 08)
+./run-tests.sh --target=aws --tests=02,07              # or only some (01 to 08)
 ```
 
 **5. Read the results**, see [Results](#results).

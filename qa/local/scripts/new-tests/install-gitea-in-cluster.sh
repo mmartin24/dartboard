@@ -63,7 +63,7 @@ spec:
         - {name: GITEA__security__INSTALL_LOCK, value: "true"}
         - {name: GITEA__server__DOMAIN, value: $svc_host}
         - {name: GITEA__server__ROOT_URL, value: "http://$svc_host:3000/"}
-        - {name: GITEA__webhook__ALLOWED_HOST_LIST, value: "*"}
+        - {name: GITEA__security__ALLOWED_HOST_LIST, value: "*,private"}
         ports:
         - containerPort: 3000
         readinessProbe:

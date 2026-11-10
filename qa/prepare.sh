@@ -4,19 +4,36 @@
 # GITEA_TOKEN, ...) to qa/<local|aws>/.env (git-ignored); the tests load it on
 # their own, so there is nothing to export.
 #
-#   ./prepare.sh local     # or: aws
+#   ./prepare.sh local [--version=0.16.3]     # or: aws
 #
-# tofu apply still asks for your approval. Safe to re-run: every step skips
-# or repeats what is already there.
+# --version writes qa/VERSION and installs that Fleet. Without it, the version
+# in qa/VERSION is installed.
+#
+# tofu apply asks for your approval. Local only: TOFU_AUTO_APPROVE=1 (exported
+# or in front of the command) skips it. Safe to re-run: every step skips or
+# repeats what is already there.
+#
+# Run ./requirements.sh local|aws [--fix] first: it checks the tools, inotify
+# limits, ports and the firewall on any Linux distribution.
 #
 # One-time steps it does not do (they need sudo or a browser):
-#   local: sudo sysctl -w fs.inotify.max_user_instances=8192
-#          sudo ufw allow from 172.16.0.0/12
+#   local: sudo sysctl -w fs.inotify.max_user_instances=8192  (requirements.sh --fix)
+#          allow 172.16.0.0/12 in your firewall, e.g. sudo ufw allow from 172.16.0.0/12
 #   aws:   aws sso login --profile <profile from terraform.tfvars>
 set -euo pipefail
+usage() { echo "usage: ./prepare.sh local|aws [--version=0.16.3]" >&2; exit 1; }
 env="${1:-}"
-[[ "$env" == local || "$env" == aws ]] || { echo "usage: ./prepare.sh local|aws" >&2; exit 1; }
-cd "$(dirname "$0")/$env"
+[[ "$env" == local || "$env" == aws ]] || usage
+shift
+qa="$(cd "$(dirname "$0")" && pwd)"
+for arg in "$@"; do
+  case "$arg" in
+    --version=?*) ver=${arg#*=}; echo "${ver#v}" >"$qa/VERSION" ;;
+    *) usage ;;
+  esac
+done
+[[ -f "$qa/VERSION" ]] || { echo "ERROR: no qa/VERSION: use --version=<Fleet version> or cp VERSION.example VERSION" >&2; exit 1; }
+cd "$qa/$env"
 tests="$PWD/scripts/new-tests"
 # Every script below uses this run's values, not an older .env (see lib/config.sh).
 export QA_PREPARE=1
@@ -37,7 +54,7 @@ if [[ "$env" == local ]]; then
         -e GITEA__security__INSTALL_LOCK=true \
         -e GITEA__server__DOMAIN=gitea.qa.local \
         -e GITEA__server__ROOT_URL=http://gitea.qa.local:3000/ \
-        -e GITEA__webhook__ALLOWED_HOST_LIST='*' \
+        -e GITEA__security__ALLOWED_HOST_LIST='*,private' \
         gitea/gitea:latest
     fi
     for _ in $(seq 60); do curl -s -o /dev/null "$gitea_url/api/healthz" && break; sleep 1; done
@@ -49,6 +66,14 @@ if [[ "$env" == local ]]; then
     GITEA_TOKEN=""
   fi
   if [[ -z "${GITEA_TOKEN:-}" ]]; then
+    # The token comes from the 'gitea' container. If something else answers on
+    # the port (e.g. the Gitea snap), the container is not up and docker exec fails.
+    if [[ "$(docker inspect -f '{{.State.Running}}' gitea 2>/dev/null)" != true ]]; then
+      echo "ERROR: $gitea_url answers, but the 'gitea' container is not running." >&2
+      echo "Something else uses that port (e.g. the Gitea snap: sudo snap stop --disable gitea)." >&2
+      echo "Stop it and run again, or export GITEA_TOKEN (and GITEA_HOST_URL) for your own Gitea." >&2
+      exit 1
+    fi
     admin="fleet-qa-admin" # must differ from GITEA_ORG
     if ! docker exec -u git gitea gitea admin user list --admin | grep -qw "$admin"; then
       docker exec -u git gitea gitea admin user create --admin --username "$admin" \
@@ -61,7 +86,7 @@ if [[ "$env" == local ]]; then
 
   echo "=== Clusters"
   tofu init
-  tofu apply
+  tofu apply ${TOFU_AUTO_APPROVE:+-auto-approve}
   export KUBECONFIG="$PWD/default_config/upstream.yaml"
 else
   profile=$(sed -n 's/^aws_profile *= *"\([^"]*\)".*/\1/p' terraform.tfvars)
